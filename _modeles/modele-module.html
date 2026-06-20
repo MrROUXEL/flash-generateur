@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     MODELE : MODULE D'UN ELEVE (liste editable, stockage durable)
+     A copier vers  public/<eleve>/<module>/index.html
+     A faire apres la copie :
+       1) Definir la CLE de stockage (variable CLE) : "<eleve>.<module>"
+          ex : "julindien.flash-generateur". ELLE DOIT ETRE UNIQUE.
+          Ne JAMAIS la changer ensuite, sinon les donnees deja saisies
+          ne seraient plus retrouvees.
+       2) Adapter le titre, le bouton retour (href du hub de l'eleve),
+          et le contenu/logique du module.
+       3) Inscrire le module dans le hub de l'eleve : public/<eleve>/index.html
+          (tableau MODULES).
+     Le stockage passe par /assets/store.js : serveur + repli navigateur.
+     ===================================================================== -->
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nom du module - Dessin-Provence</title>
+<style>
+  :root{--sombre:#514B4B;--blanc:#FFFFFF;--violet:#5E4B8B;--violet-moy:#998AB5;--violet-clair:#FBF8FF;--beige:#E8D5B5;--ombre:0 10px 30px rgba(94,75,139,.14);}
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:var(--sombre);
+    background:linear-gradient(180deg,var(--violet-clair) 0%,#FFFFFF 70%);min-height:100vh;padding:28px 16px 60px;}
+  .wrap{max-width:640px;margin:0 auto;}
+  .home-btn{display:inline-flex;align-items:center;gap:7px;text-decoration:none;font-weight:700;font-size:14px;
+    color:var(--violet);background:var(--blanc);border:1px solid rgba(153,138,181,.45);border-radius:22px;
+    padding:8px 15px;box-shadow:var(--ombre);margin-bottom:14px;}
+  .home-btn:hover{background:var(--violet);color:#fff;}
+  .home-btn svg{width:16px;height:16px;fill:currentColor;}
+  h1{font-weight:700;font-size:clamp(22px,4.5vw,30px);color:var(--violet);text-transform:uppercase;margin:6px 0 18px;}
+  .add{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
+  .field{flex:1;min-width:200px;font-size:15px;padding:10px 13px;border:1px solid rgba(153,138,181,.5);border-radius:10px;}
+  .field:focus{outline:none;border-color:var(--violet);}
+  .btn{font-weight:700;font-size:14px;border:1px solid var(--violet);background:var(--violet);color:#fff;border-radius:10px;padding:10px 16px;cursor:pointer;}
+  .btn.ghost{background:transparent;color:var(--violet);}
+  .item{display:flex;gap:10px;align-items:center;background:#fff;border:1px solid rgba(153,138,181,.4);border-radius:12px;padding:12px;margin-bottom:10px;}
+  .item .name{flex:1;font-weight:700;color:var(--violet);border:none;background:transparent;font-size:15px;}
+  .item .name:focus{outline:none;}
+  .del{background:transparent;border:1px solid rgba(153,138,181,.5);color:var(--violet-moy);border-radius:8px;cursor:pointer;padding:6px 10px;}
+  .del:hover{background:var(--violet);color:#fff;}
+  .count{color:var(--violet-moy);font-size:13px;margin-bottom:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- Bouton retour : remplacer l'href par le hub de l'eleve -->
+  <a class="home-btn" href="/{{ELEVE}}/">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 2.6 11.3a1 1 0 0 0 1.3 1.5l.6-.5V20a1 1 0 0 0 1 1h4v-5h4v5h4a1 1 0 0 0 1-1v-7.7l.6.5a1 1 0 1 0 1.3-1.5L12 3.2Z"/></svg>
+    Retour au hub
+  </a>
+
+  <h1>Nom du module</h1>
+
+  <div class="add">
+    <input id="newItem" class="field" type="text" placeholder="Nouvel element">
+    <button id="addBtn" class="btn">Ajouter</button>
+  </div>
+  <div class="count" id="count"></div>
+  <div id="list"></div>
+</div>
+
+<script src="/assets/store.js"></script>
+<script>
+/* ===== A PERSONNALISER ===== */
+const CLE = "{{ELEVE}}.{{MODULE}}";          // UNIQUE, ne jamais changer ensuite
+const LISTE_DEFAUT = ["Premier element", "Deuxieme element"];
+
+/* ===== Etat ===== */
+let items = LISTE_DEFAUT.slice();            // remplace par le serveur a l'init
+
+const listEl  = document.getElementById('list');
+const countEl = document.getElementById('count');
+const newItem = document.getElementById('newItem');
+const addBtn  = document.getElementById('addBtn');
+
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function normaliser(a){ return (Array.isArray(a)?a:[]).map(x=>String(x)).filter(s=>s.trim().length); }
+
+async function charger(){
+  const v = await DPStore.load(CLE, null);
+  return (Array.isArray(v) && v.length) ? normaliser(v) : LISTE_DEFAUT.slice();
+}
+function sauver(){ DPStore.save(CLE, items); }   // serveur + repli navigateur
+
+function render(){
+  countEl.textContent = items.length + ' element(s)';
+  listEl.innerHTML = items.map((t,i)=>`
+    <div class="item">
+      <input class="name" data-i="${i}" value="${esc(t)}">
+      <button class="del" data-del="${i}" title="Supprimer">✕</button>
+    </div>`).join('');
+}
+function ajouter(){
+  const v=(newItem.value||'').trim(); if(!v) return;
+  items.push(v); sauver(); newItem.value=''; render();
+}
+listEl.addEventListener('input', e=>{
+  const n=e.target.closest('.name'); if(n){ items[+n.dataset.i]=n.value; sauver(); }
+});
+listEl.addEventListener('click', e=>{
+  const d=e.target.closest('[data-del]');
+  if(d){ items.splice(+d.dataset.del,1); sauver(); render(); }
+});
+addBtn.addEventListener('click', ajouter);
+newItem.addEventListener('keydown', e=>{ if(e.key==='Enter') ajouter(); });
+
+/* ===== Init : charge depuis le serveur puis affiche ===== */
+(async function(){ items = await charger(); render(); })();
+</script>
+</body>
+</html>
