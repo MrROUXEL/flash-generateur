@@ -35,7 +35,7 @@
     min-height:100vh;
     padding:34px 18px 70px;
   }
-  .wrap{max-width:920px;margin:0 auto;}
+  .wrap{max-width:1060px;margin:0 auto;}
 
   /* ---- bouton retour ---- */
   .home-btn{display:inline-flex;align-items:center;gap:7px;text-decoration:none;
@@ -70,10 +70,11 @@
     padding:16px;margin:18px 0 0;
   }
   .scene-frame{
-    position:relative;width:100%;aspect-ratio:16/10;
+    position:relative;width:100%;aspect-ratio:4/3;
     border-radius:12px;overflow:hidden;background:var(--blanc);
   }
-  #scene{display:block;width:100%;height:100%;}
+  #scene{display:block;width:100%;height:100%;cursor:grab;touch-action:none;}
+  #scene:active{cursor:grabbing;}
   .scene-foot{
     display:flex;align-items:center;justify-content:space-between;gap:14px;
     flex-wrap:wrap;margin-top:14px;
@@ -208,7 +209,7 @@
     </label>
   </section>
 
-  <p class="note">Aucun outil de deplacement : observez la scene telle qu'elle est posee, puis generez-en une nouvelle a volonte. Les volumes peuvent se repeter (deux cubes, par exemple).</p>
+  <p class="note">Faites glisser dans la scene pour la tourner (molette pour zoomer), puis generez une nouvelle scene a volonte. Les volumes peuvent se repeter (deux cubes, par exemple).</p>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -262,9 +263,28 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
 renderer.setClearColor(0xffffff, 1);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(34, 16/10, 0.1, 100);
-camera.position.set(5.0, 3.6, 6.8);
-camera.lookAt(0, 0, 0);
+const camera = new THREE.PerspectiveCamera(34, 4/3, 0.1, 100);
+// position camera en coordonnees spheriques (rotation a la souris)
+const sph = { r:8.2, theta:0.85, phi:1.05 };  // theta = azimut, phi = polaire depuis +Y
+function applyCamera(){
+  const sp=Math.sin(sph.phi), cp=Math.cos(sph.phi);
+  camera.position.set(sph.r*sp*Math.sin(sph.theta), sph.r*cp, sph.r*sp*Math.cos(sph.theta));
+  camera.lookAt(0,0,0);
+}
+applyCamera();
+
+/* --- eclairage doux facon Rembrandt (cle chaude en haut a gauche) --- */
+const hemi = new THREE.HemisphereLight(0xffffff, 0xc9bfe0, 0.45);
+scene.add(hemi);
+const amb = new THREE.AmbientLight(0xffffff, 0.18);
+scene.add(amb);
+const key = new THREE.DirectionalLight(0xfff2e0, 0.95);
+scene.add(key); scene.add(key.target);
+function updateKey(){
+  // lumiere venant du haut-gauche-avant, relative a la vue (reste en haut a gauche quand on tourne)
+  const v = new THREE.Vector3(-1.1, 1.4, 0.9).applyQuaternion(camera.quaternion).normalize();
+  key.position.copy(v.multiplyScalar(10));
+}
 
 const NEAR_D = 5.0, FAR_D = 13.0;   // bornes pour la profondeur (detection des contours)
 let group = new THREE.Group();
@@ -308,8 +328,8 @@ const compMat = new THREE.ShaderMaterial({
     bgColor:{value:BG},
     thrN:{value:0.16},
     thrD:{value:0.012},
-    thrLap:{value:0.04},
-    width:{value:1.4}
+    thrLap:{value:0.05},
+    width:{value:2.0}
   },
   vertexShader:`
     varying vec2 vUv;
@@ -328,17 +348,20 @@ const compMat = new THREE.ShaderMaterial({
       vec4 r = texture2D(tND, vUv+tx);
       vec4 u = texture2D(tND, vUv-ty);
       vec4 d = texture2D(tND, vUv+ty);
-      // saut de normale : creases nettes + bords + intersections
-      float ne = max(max(distance(l.rgb,c.rgb), distance(r.rgb,c.rgb)),
-                     max(distance(u.rgb,c.rgb), distance(d.rgb,c.rgb)));
-      // saut de profondeur : silhouettes / recouvrements
-      float de = max(max(abs(l.a-c.a), abs(r.a-c.a)), max(abs(u.a-c.a), abs(d.a-c.a)));
-      // pli de profondeur (Laplacien) : intersections quasi tangentes
-      float lap = abs(l.a + r.a + u.a + d.a - 4.0*c.a);
-      bool isBg  = c.a > 0.999;
-      bool nearBg = (l.a>0.999 || r.a>0.999 || u.a>0.999 || d.a>0.999);
+      bool isBg = c.a > 0.999;
       float edge = 0.0;
-      if(!isBg){
+      if(isBg){
+        // contour exterieur : on epaissit la ligne vers le fond
+        if(l.a<0.999 || r.a<0.999 || u.a<0.999 || d.a<0.999) edge = 1.0;
+      } else {
+        // saut de normale : creases nettes + bords + intersections
+        float ne = max(max(distance(l.rgb,c.rgb), distance(r.rgb,c.rgb)),
+                       max(distance(u.rgb,c.rgb), distance(d.rgb,c.rgb)));
+        // saut de profondeur : silhouettes / recouvrements
+        float de = max(max(abs(l.a-c.a), abs(r.a-c.a)), max(abs(u.a-c.a), abs(d.a-c.a)));
+        // pli de profondeur (Laplacien) : intersections quasi tangentes
+        float lap = abs(l.a + r.a + u.a + d.a - 4.0*c.a);
+        bool nearBg = (l.a>0.999 || r.a>0.999 || u.a>0.999 || d.a>0.999);
         if(ne>thrN || de>thrD) edge = 1.0;
         else if(!nearBg && lap>thrLap) edge = 1.0;
       }
@@ -365,7 +388,7 @@ function genScene(){
     const v = VOLUMES[Math.floor(Math.random()*VOLUMES.length)];
     currentNames.push(v.nom);
     const geo = v.geo();
-    const mat = new THREE.MeshBasicMaterial({ color: FILLS[i % FILLS.length] });
+    const mat = new THREE.MeshLambertMaterial({ color: FILLS[i % FILLS.length] });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.set(rand(0,Math.PI*2), rand(0,Math.PI*2), rand(0,Math.PI*2));
     if(n>1){
@@ -396,7 +419,8 @@ function resize(){
 }
 function render(){
   resize();
-  // 1) aplats
+  updateKey();
+  // 1) surfaces eclairees
   scene.overrideMaterial = null;
   renderer.setRenderTarget(rtColor);
   renderer.setClearColor(0xffffff,1); renderer.clear();
@@ -412,6 +436,28 @@ function render(){
   renderer.render(fsScene, fsCam);
 }
 function loop(){ render(); requestAnimationFrame(loop); }
+
+/* ====================== ROTATION A LA SOURIS ====================== */
+let dragging=false, lastX=0, lastY=0;
+canvas.addEventListener('pointerdown', e=>{
+  dragging=true; lastX=e.clientX; lastY=e.clientY;
+  try{ canvas.setPointerCapture(e.pointerId); }catch(err){}
+});
+canvas.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY;
+  sph.theta -= dx*0.008;
+  sph.phi = Math.min(Math.PI-0.12, Math.max(0.12, sph.phi - dy*0.008));
+  applyCamera();
+});
+function endDrag(){ dragging=false; }
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('wheel', e=>{
+  e.preventDefault();
+  sph.r = Math.min(13, Math.max(4.5, sph.r + (e.deltaY>0?0.6:-0.6)));
+  applyCamera();
+}, {passive:false});
 
 /* ====================== CHRONO ====================== */
 let countN = 2;

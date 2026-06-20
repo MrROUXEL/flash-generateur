@@ -1,0 +1,11 @@
+# Fichiers a NE PAS inclure dans l'image (ils restent versionnes sur GitHub)
+.git
+.gitignore
+.DS_Store
+**/.DS_Store
+node_modules
+_data
+*.md
+_modeles/
+Dockerfile
+.dockerignore
