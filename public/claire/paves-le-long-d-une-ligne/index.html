@@ -325,6 +325,9 @@ function resize(){
 }
 function render(){
   resize(); updateKey();
+  // bornes de profondeur suivent la distance camera (sinon disparition au dezoom)
+  ndMaterial.uniforms.uNear.value = sph.r - 7.0;
+  ndMaterial.uniforms.uFar.value  = sph.r + 7.0;
   scene.overrideMaterial=null;
   renderer.setRenderTarget(rtColor); renderer.setClearColor(0xffffff,1); renderer.clear(); renderer.render(scene,camera);
   scene.overrideMaterial=ndMaterial;
